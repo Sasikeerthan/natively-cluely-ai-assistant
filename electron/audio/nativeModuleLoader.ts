@@ -1,9 +1,15 @@
 import path from 'path';
+import type { KeyboardHookEvent } from '../../src/types/keyboardEvent';
 
 export interface AudioDeviceInfo {
   id: string;
   name: string;
 }
+
+// Re-export the canonical keyboard event type under its native-module-side
+// alias so existing call sites that imported NativeKeyEvent here keep
+// working. The single source of truth lives in src/types/keyboardEvent.ts.
+export type NativeKeyEvent = KeyboardHookEvent;
 
 export interface NativeModule {
   getHardwareId(): string;
@@ -29,6 +35,17 @@ export interface NativeModule {
     start(callback: (...args: any[]) => any, onSpeechEnded?: (...args: any[]) => any): void;
     stop(): void;
   };
+  // Stealth keyboard pipeline (issue #225, Phase 2/3). Windows-only; the
+  // Rust side returns errors on other platforms. All four are optional so
+  // older binaries continue to load.
+  installKeyboardHook?: (
+    callback: (err: Error | null, event: NativeKeyEvent) => void
+  ) => void;
+  uninstallKeyboardHook?: () => void;
+  startRawInputObserver?: (
+    callback: (err: Error | null, event: NativeKeyEvent) => void
+  ) => void;
+  stopRawInputObserver?: () => void;
 }
 
 // Hard-required: crash the module load if any of these are missing.
@@ -42,6 +59,17 @@ const REQUIRED_CONSTRUCTORS = ['SystemAudioCapture', 'MicrophoneCapture'];
 // skips revocation check if validateDodoKey is missing,
 // skips server deactivation if deactivateDodoKey is missing.
 const SOFT_REQUIRED_METHODS = ['verifyDodoKey', 'validateDodoKey', 'deactivateDodoKey'];
+// Win32-only: stealth keyboard pipeline (issue #225 Phase 2/3). If any of
+// these is absent on Windows, the LL hook + raw-input observer will silently
+// no-op the moment the user presses Ctrl+Shift+Space. Surface that at boot
+// so regressions (e.g. `pub mod keyboard;` getting commented out again) fail
+// loudly here instead of as a "the hotkey does nothing" bug report.
+const WIN32_KEYBOARD_METHODS = [
+    'installKeyboardHook',
+    'uninstallKeyboardHook',
+    'startRawInputObserver',
+    'stopRawInputObserver',
+];
 
 /**
  * Validates that a loaded native module conforms to the NativeModule interface.
@@ -70,6 +98,21 @@ function validateNativeModule(mod: any): asserts mod is NativeModule {
             console.warn(
                 `[nativeModuleLoader] WARNING: optional method "${fn}" not found in binary — ` +
                 `Dodo license validation/deactivation will be unavailable until binary is rebuilt.`
+            );
+        }
+    }
+
+    // Win32-only: keyboard pipeline (issue #225). One WARN if any are missing —
+    // batched so we don't spam four lines for a single rebuild miss. Logged
+    // once at module load (cached === undefined branch) so repeated callers
+    // of loadNativeModule() don't re-emit the warning.
+    if (process.platform === 'win32') {
+        const missingKb = WIN32_KEYBOARD_METHODS.filter((fn) => typeof mod[fn] !== 'function');
+        if (missingKb.length > 0) {
+            console.warn(
+                `[nativeModuleLoader] WARNING: Win32 keyboard pipeline symbols missing from binary ` +
+                `[${missingKb.join(', ')}] — undetectable type-mode hotkey (Ctrl+Shift+Space) will not ` +
+                `work. Rebuild required: cd native-module && npx napi build --platform --release.`
             );
         }
     }

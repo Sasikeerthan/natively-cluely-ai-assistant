@@ -11,6 +11,7 @@ import { AudioDevices } from "./audio/AudioDevices";
 import { PhoneMirrorService } from "./services/PhoneMirrorService";
 import { CodexCliService } from "./services/CodexCliService";
 import { SettingsManager } from "./services/SettingsManager";
+import { KEYBOARD_PIPELINE_CHANNELS } from "./services/keyboardPipelineIpc";
 
 
 import { RECOGNITION_LANGUAGES, AI_RESPONSE_LANGUAGES } from "./config/languages"
@@ -639,6 +640,20 @@ export function initializeIpcHandlers(appState: AppState): void {
     appState.setUndetectable(state)
     return { success: true }
   })
+
+  // Win32 stealth type-mode (issue #225 Phase 2). Renderer calls these to
+  // start/stop the LL keyboard hook session. The native module reports
+  // every keystroke over IPC channel 'overlay:type-mode-key'.
+  safeHandle(KEYBOARD_PIPELINE_CHANNELS.ENTER_TYPE_MODE, async () => {
+    return appState.enterTypeMode();
+  });
+  safeHandle(KEYBOARD_PIPELINE_CHANNELS.EXIT_TYPE_MODE, async () => {
+    appState.exitTypeMode();
+    return { success: true };
+  });
+  safeHandle(KEYBOARD_PIPELINE_CHANNELS.GET_TYPE_MODE_ACTIVE, async () => {
+    return appState.isTypeModeActive();
+  });
 
   safeHandle("set-disguise", async (_, mode: 'terminal' | 'settings' | 'activity' | 'none') => {
     appState.setDisguise(mode)

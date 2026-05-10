@@ -44,8 +44,11 @@ import 'katex/dist/katex.min.css';
 import { analytics, detectProviderType } from '../lib/analytics/analytics.service';
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
+import { useTypeMode } from '../hooks/useTypeMode';
+import { useRawInputNudge } from '../hooks/useRawInputNudge';
 import { getOverlayAppearance, OVERLAY_OPACITY_DEFAULT } from '../lib/overlayAppearance';
 import { getCodexCliModelDisplayName } from '../utils/modelUtils';
+import { isWindows } from '../utils/platformUtils';
 
 interface Message {
     id: string;
@@ -231,6 +234,32 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     const [isExpanded, setIsExpanded] = useState(true);
     const [inputValue, setInputValue] = useState('');
     const { shortcuts, isShortcutPressed } = useShortcuts();
+
+    // Win32 stealth type mode (issue #225 Phase 2). When active, the main
+    // process feeds us every keystroke from a low-level keyboard hook —
+    // the browser does NOT see those keys, so the overlay's HWND can stay
+    // non-foreground and no blur/focus is detected.
+    //
+    // `handleManualSubmit` is declared further down this component. We
+    // route the type-mode submit through a ref instead of capturing the
+    // const directly so a future refactor can't accidentally call onSubmit
+    // synchronously during render and trip TDZ. The ref is populated
+    // unconditionally below, after handleManualSubmit's let-binding is
+    // initialised — and React guarantees the body runs top-to-bottom.
+    const handleManualSubmitRef = useRef<() => void>(() => {});
+    const { active: typeModeActive } = useTypeMode({
+        onChar: (ch) => setInputValue(prev => prev + ch),
+        onBackspace: () => setInputValue(prev => prev.slice(0, -1)),
+        onSubmit: () => { handleManualSubmitRef.current(); },
+        onCancel: () => { setInputValue(''); },
+        syncInitialState: true,
+    });
+
+    // Phase 3 nudge: while undetectable mode is on, the main process runs a
+    // passive raw-input observer that detects keystrokes targeted at OTHER
+    // apps (e.g. the user's browser). When that fires we surface a faint
+    // banner reminding them about the Ctrl+Shift+Space hotkey.
+    const showRawInputNudge = useRawInputNudge({ typeModeActive });
     const [messages, setMessages] = useState<Message[]>([]);
     const [isConnected, setIsConnected] = useState(false);
     const [sttUserStatus, setSttUserStatus] = useState<'connected' | 'reconnecting' | 'failed'>('connected');
@@ -323,6 +352,12 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
 
     // Settings State with Persistence
     const [isUndetectable, setIsUndetectable] = useState(false);
+    // Win32 + undetectable: clicking the input bar can't focus the overlay HWND
+    // (WS_EX_NOACTIVATE), so the click silently does nothing. Flash the
+    // type-mode hint banner when the user attempts a click so the dead-end is
+    // visibly explained instead of feeling broken. (issue #225)
+    const [undetectableHintFlash, setUndetectableHintFlash] = useState(false);
+    const undetectableHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [hideChatHidesWidget, setHideChatHidesWidget] = useState(() => {
         const stored = localStorage.getItem('natively_hideChatHidesWidget');
         return stored ? stored === 'true' : true;
@@ -494,6 +529,41 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
         localStorage.setItem('natively_undetectable', String(isUndetectable));
         localStorage.setItem('natively_hideChatHidesWidget', String(hideChatHidesWidget));
     }, [isUndetectable, hideChatHidesWidget]);
+
+    // Drop any pending flash when undetectable flips off OR type mode flips on.
+    // Without the typeModeActive guard, an in-flight 1.4s timer can fire AFTER
+    // the user submits their type-mode entry and lands them back on the hint
+    // banner with flash=true — looking like a phantom click that didn't happen.
+    useEffect(() => {
+        if (!isUndetectable || typeModeActive) {
+            if (undetectableHintTimerRef.current) {
+                clearTimeout(undetectableHintTimerRef.current);
+                undetectableHintTimerRef.current = null;
+            }
+            setUndetectableHintFlash(false);
+        }
+    }, [isUndetectable, typeModeActive]);
+
+    // Unmount-only: clear any pending flash timer to avoid a setState after unmount.
+    useEffect(() => () => {
+        if (undetectableHintTimerRef.current) {
+            clearTimeout(undetectableHintTimerRef.current);
+            undetectableHintTimerRef.current = null;
+        }
+    }, []);
+
+    // Drive the same flash from the raw-input observer ("user is typing in
+    // their browser"). Folds the legacy showRawInputNudge UI into the unified
+    // banner — same banner, same flash, two trigger sources (click + observer).
+    useEffect(() => {
+        if (!showRawInputNudge) return;
+        if (!isUndetectable || !isWindows || typeModeActive) return;
+        setUndetectableHintFlash(true);
+        if (undetectableHintTimerRef.current) clearTimeout(undetectableHintTimerRef.current);
+        undetectableHintTimerRef.current = setTimeout(() => {
+            setUndetectableHintFlash(false);
+        }, 1400);
+    }, [showRawInputNudge, isUndetectable, typeModeActive]);
 
     // Mouse Passthrough State
     const [isMousePassthrough, setIsMousePassthrough] = useState(false);
@@ -1890,6 +1960,13 @@ Provide only the answer, nothing else.`;
         }
     };
 
+    // Keep the type-mode submit ref in sync with the latest closure of
+    // handleManualSubmit. Refs are not reactive; assigning every render is
+    // intentional — the IPC subscription captures `current` at call time,
+    // so we always invoke the freshest version (which closes over the
+    // current inputValue / attachedContext / etc.).
+    handleManualSubmitRef.current = handleManualSubmit;
+
     const clearChat = () => {
         setMessages([]);
     };
@@ -2920,6 +2997,32 @@ Provide only the answer, nothing else.`;
                                     </div>
                                 )}
 
+                                {typeModeActive && (
+                                    <div
+                                        className="mb-1.5 flex items-center gap-1.5 text-[11px] overlay-text-muted"
+                                        role="status"
+                                        aria-live="polite"
+                                    >
+                                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                                        <span>Typing through Natively — Enter sends, Esc cancels, idle 5s exits</span>
+                                    </div>
+                                )}
+                                {!typeModeActive && isUndetectable && isWindows && (
+                                    <div
+                                        className={`mb-1.5 flex items-center gap-1.5 text-[11px] transition-all duration-200 ${
+                                            undetectableHintFlash
+                                                ? 'overlay-text-primary opacity-100 scale-[1.02]'
+                                                : 'overlay-text-muted opacity-70'
+                                        }`}
+                                        role="status"
+                                        aria-live="polite"
+                                    >
+                                        <span className={`inline-block w-1.5 h-1.5 rounded-full ${undetectableHintFlash ? 'bg-amber-400 animate-pulse' : 'bg-amber-400/50'}`} />
+                                        <span>Undetectable mode — press</span>
+                                        <kbd className="px-1.5 py-0.5 rounded border text-[10px] font-sans overlay-control-surface overlay-text-secondary" style={appearance.controlStyle}>Ctrl+Shift+Space</kbd>
+                                        <span>to type</span>
+                                    </div>
+                                )}
                                 <div className="relative group">
                                     <input
                                         ref={textInputRef}
@@ -2927,13 +3030,32 @@ Provide only the answer, nothing else.`;
                                         value={inputValue}
                                         onChange={(e) => setInputValue(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()}
+                                        onPointerDown={() => {
+                                            // Win32 + undetectable: the overlay HWND is non-activating
+                                            // (WS_EX_NOACTIVATE), so clicking the input does NOT focus it
+                                            // and direct typing is impossible by design (issue #225).
+                                            // Flash the hint banner so the dead end is explained.
+                                            // Pointer (vs mouse) covers trackpad + touch + pen too.
+                                            if (isUndetectable && isWindows && !typeModeActive) {
+                                                setUndetectableHintFlash(true);
+                                                if (undetectableHintTimerRef.current) clearTimeout(undetectableHintTimerRef.current);
+                                                undetectableHintTimerRef.current = setTimeout(() => {
+                                                    setUndetectableHintFlash(false);
+                                                }, 1400);
+                                            }
+                                        }}
 
                                         className={`w-full border focus:ring-1 rounded-xl pl-3 pr-10 py-2.5 focus:outline-none transition-all duration-200 ease-sculpted text-[13px] leading-relaxed ${inputClass}`}
                                         style={appearance.inputStyle}
                                     />
 
                                     {/* Custom Rich Placeholder */}
-                                    {!inputValue && (
+                                    {!inputValue && !typeModeActive && (
+                                        // Hidden during type mode: the LL hook (issue #225 Phase 2)
+                                        // swallows every keystroke, including the selective-screenshot
+                                        // global shortcut shown here. Advertising a shortcut that
+                                        // can't fire while the indicator above says "Typing through
+                                        // Natively" would be misleading.
                                         <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-[13px] overlay-text-muted">
                                             <span>Ask anything on screen or conversation, or</span>
                                             <div className="flex items-center gap-1 opacity-80">

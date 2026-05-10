@@ -30,5 +30,19 @@ cidre = { version = "0.11.10", features = ["ca", "cm", "av", "cat", "dispatch", 
 
 [target.'cfg(target_os = "windows")'.dependencies]
 wasapi = "0.13.0"
-windows = { version = "0.52.0", features = ["Win32_Media_Audio", "Win32_System_Com", "Win32_System_Threading"] }
+# windows-rs 0.52 features. Each feature gates a specific set of Win32 symbols
+# we actually call — listed inline so future audits can prune confidently.
+windows = { version = "0.52.0", features = [
+    # Audio capture (WASAPI) — original feature set.
+    "Win32_Media_Audio",                # IAudioClient, IMMDevice, WAVEFORMATEX, PKEY_*
+    "Win32_System_Com",                 # CoInitializeEx, CLSIDFromString, CoCreateInstance
+    "Win32_System_Threading",           # GetCurrentThreadId (also used by keyboard/*)
+    # Keyboard pipeline — issue #225, Phase 2 (LL hook) + Phase 3 (raw input).
+    "Win32_Foundation",                 # HINSTANCE, HWND, LPARAM, LRESULT, WPARAM
+    "Win32_System_LibraryLoader",       # GetModuleHandleW
+    "Win32_UI_Input",                   # RegisterRawInputDevices, RAWINPUT* (Phase 3 only)
+    "Win32_UI_Input_KeyboardAndMouse",  # ToUnicode, VK_* constants
+    "Win32_UI_WindowsAndMessaging",     # SetWindowsHookExW, GetMessageW, CreateWindowExW, etc.
+    "Win32_Graphics_Gdi",               # WNDCLASSEXW / RegisterClassExW pull HBRUSH+HICON (Phase 3 only)
+] }
 tracing = "0.1.44"

@@ -1,4 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron"
+import type { KeyboardHookEvent } from "../src/types/keyboardEvent"
+import { KEYBOARD_PIPELINE_CHANNELS } from "./services/keyboardPipelineIpc"
 
 // Types for the exposed Electron API
 interface ElectronAPI {
@@ -527,6 +529,32 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openExternal: (url: string) => ipcRenderer.invoke("open-external", url),
   setUndetectable: (state: boolean) => ipcRenderer.invoke("set-undetectable", state),
   getUndetectable: () => ipcRenderer.invoke("get-undetectable"),
+
+  // Win32 stealth type-mode (issue #225 Phase 2). Renderer drives the
+  // overlay's typing UI from these:
+  //   * enterTypeMode / exitTypeMode — start / stop the LL hook session
+  //   * onTypeModeKey — receive every keystroke captured by the hook
+  //   * onTypeModeStateChange — sync UI when type mode flips on/off
+  //     (e.g. for the 5s idle auto-exit, or hotkey-driven enter)
+  //   * onRawInputTyping — passive nudge: user is typing into another app
+  enterTypeMode: () => ipcRenderer.invoke(KEYBOARD_PIPELINE_CHANNELS.ENTER_TYPE_MODE),
+  exitTypeMode: () => ipcRenderer.invoke(KEYBOARD_PIPELINE_CHANNELS.EXIT_TYPE_MODE),
+  isTypeModeActive: () => ipcRenderer.invoke(KEYBOARD_PIPELINE_CHANNELS.GET_TYPE_MODE_ACTIVE),
+  onTypeModeKey: (callback: (event: KeyboardHookEvent) => void) => {
+    const subscription = (_: any, event: KeyboardHookEvent) => callback(event);
+    ipcRenderer.on(KEYBOARD_PIPELINE_CHANNELS.TYPE_MODE_KEY, subscription);
+    return () => { ipcRenderer.removeListener(KEYBOARD_PIPELINE_CHANNELS.TYPE_MODE_KEY, subscription); };
+  },
+  onTypeModeStateChange: (callback: (state: { active: boolean; reason?: string }) => void) => {
+    const subscription = (_: any, state: any) => callback(state);
+    ipcRenderer.on(KEYBOARD_PIPELINE_CHANNELS.TYPE_MODE_STATE, subscription);
+    return () => { ipcRenderer.removeListener(KEYBOARD_PIPELINE_CHANNELS.TYPE_MODE_STATE, subscription); };
+  },
+  onRawInputTyping: (callback: (info: { vk: number; ts: number }) => void) => {
+    const subscription = (_: any, info: any) => callback(info);
+    ipcRenderer.on(KEYBOARD_PIPELINE_CHANNELS.RAW_INPUT_TYPING, subscription);
+    return () => { ipcRenderer.removeListener(KEYBOARD_PIPELINE_CHANNELS.RAW_INPUT_TYPING, subscription); };
+  },
   setOverlayMousePassthrough: (enabled: boolean) => ipcRenderer.invoke("set-overlay-mouse-passthrough", enabled),
   toggleOverlayMousePassthrough: () => ipcRenderer.invoke("toggle-overlay-mouse-passthrough"),
   getOverlayMousePassthrough: () => ipcRenderer.invoke("get-overlay-mouse-passthrough"),

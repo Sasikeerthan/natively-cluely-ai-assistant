@@ -6,6 +6,7 @@
 const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 const SQLITE_VEC_VERSION = '0.1.7-alpha.2';
 
@@ -13,6 +14,14 @@ const packages = [
   'sqlite-vec-darwin-arm64',
   'sqlite-vec-darwin-x64',
 ];
+
+// These are macOS-only packages — no-op on any other platform
+if (os.platform() !== 'darwin') {
+  console.log('[ensure-sqlite-vec] Non-macOS platform detected, skipping darwin sqlite-vec packages.');
+  process.exit(0);
+}
+
+const tmpDir = os.tmpdir();
 
 for (const pkg of packages) {
   const pkgDir = path.join(__dirname, '..', 'node_modules', pkg);
@@ -24,11 +33,11 @@ for (const pkg of packages) {
   console.log(`[ensure-sqlite-vec] ${pkg} missing — fetching...`);
   try {
     // Use npm pack to download the tarball, then extract it into node_modules
-    const tarball = execSync(`npm pack ${pkg}@${SQLITE_VEC_VERSION} --pack-destination /tmp`, {
+    const tarball = execSync(`npm pack ${pkg}@${SQLITE_VEC_VERSION} --pack-destination "${tmpDir}"`, {
       cwd: path.join(__dirname, '..'),
       encoding: 'utf-8',
     }).trim();
-    const tarPath = path.join('/tmp', tarball);
+    const tarPath = path.join(tmpDir, tarball);
 
     fs.mkdirSync(pkgDir, { recursive: true });
     execSync(`tar xzf "${tarPath}" --strip-components=1 -C "${pkgDir}"`, { stdio: 'inherit' });

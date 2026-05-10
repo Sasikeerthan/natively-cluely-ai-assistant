@@ -287,7 +287,12 @@ export class WindowHelper {
       transparent: true,
       backgroundColor: "#00000000",
       alwaysOnTop: true,
-      focusable: true,
+      // Win32: in undetectable mode the overlay must NOT become the foreground
+      // HWND (focusable=false → WS_EX_NOACTIVATE), so the user's browser never
+      // sees a WM_KILLFOCUS. macOS keeps focusable=true; its stealth path uses
+      // setVisibleOnAllWorkspaces / level=floating instead. (issue #225)
+      // Live toggling on undetectable change is handled in main.ts setUndetectable().
+      focusable: !(process.platform === 'win32' && this.appState.getUndetectable()),
       resizable: false, // Enforce automatic resizing only
       movable: true,
       skipTaskbar: true, // Don't show separately in dock/taskbar
@@ -504,9 +509,13 @@ export class WindowHelper {
       console.log('[WindowHelper] Overlay mouse passthrough ON');
     } else {
       this.overlayWindow.setIgnoreMouseEvents(false);
-      // Restore full interactivity when passthrough is turned off.
-      this.overlayWindow.setFocusable(true);
-      console.log('[WindowHelper] Overlay mouse passthrough OFF');
+      // Restore focusability when passthrough is turned off — but on Win32 keep
+      // the overlay non-activating (WS_EX_NOACTIVATE) while undetectable is on,
+      // otherwise clicking it would foreground the HWND and the browser sees
+      // a blur/focus event (issue #225).
+      const winStealth = process.platform === 'win32' && this.appState.getUndetectable();
+      this.overlayWindow.setFocusable(!winStealth);
+      console.log(`[WindowHelper] Overlay mouse passthrough OFF (focusable=${!winStealth})`);
     }
   }
 
@@ -534,7 +543,11 @@ export class WindowHelper {
       this.overlayWindow.showInactive();
       // Bring to front without a full app-activate (avoids dock bounce on macOS).
       // setAlwaysOnTop is already set at creation; a focus() call alone is safe.
-      this.overlayWindow.focus();
+      // EXCEPT on Win32 + undetectable — focus() would foreground the HWND and
+      // the browser would see a blur event (issue #225). Type Mode (Phase 2)
+      // handles input without requiring foreground.
+      const winStealth = process.platform === 'win32' && this.appState.getUndetectable();
+      if (!winStealth) this.overlayWindow.focus();
     }
   }
 
@@ -635,7 +648,10 @@ export class WindowHelper {
             this.overlayWindow.setOpacity(1);
             // Re-assert z-order on Windows — DWM can silently demote the HWND after hide/show
             this.overlayWindow.setAlwaysOnTop(true, 'screen-saver');
-            if (!inactive) this.overlayWindow.focus();
+            // Suppress focus() in Win32 + undetectable: foregrounding the
+            // overlay HWND would fire a blur on the user's browser (issue #225).
+            const winStealth = process.platform === 'win32' && this.appState.getUndetectable();
+            if (!inactive && !winStealth) this.overlayWindow.focus();
           }
         }, 60);
       } else {
@@ -652,8 +668,11 @@ export class WindowHelper {
           this.overlayWindow.setAlwaysOnTop(true, 'screen-saver');
         }
         if (inactive) this.overlayWindow.showInactive(); else this.overlayWindow.show();
-        // Only grab focus for explicit user-initiated shows (not shortcut/ghost shows)
-        if (!inactive) this.overlayWindow.focus();
+        // Only grab focus for explicit user-initiated shows (not shortcut/ghost shows).
+        // Suppress on Win32 + undetectable so the overlay HWND never becomes
+        // foreground (issue #225 — fires blur on the browser otherwise).
+        const winStealth = process.platform === 'win32' && this.appState.getUndetectable();
+        if (!inactive && !winStealth) this.overlayWindow.focus();
       }
       this.isWindowVisible = true;
     }

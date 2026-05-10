@@ -54,6 +54,34 @@ export declare function getInputDevices(): Array<AudioDeviceInfo>
 
 export declare function getOutputDevices(): Array<AudioDeviceInfo>
 
+export declare function installKeyboardHook(callback: ((err: Error | null, arg: KeyEvent) => any)): void
+
+/**
+ * Single keystroke event delivered to JS. Mirrors the relevant fields from
+ * KBDLLHOOKSTRUCT plus a resolved `character` (None for non-printable keys
+ * like Esc, F-keys, arrows, modifiers in isolation, etc.).
+ *
+ * The JS side is the gatekeeper: it decides which characters become input,
+ * which are command keys (Enter, Esc, Backspace), and when to uninstall
+ * the hook. The native layer just reports.
+ */
+export interface KeyEvent {
+  vk: number
+  scancode: number
+  down: boolean
+  alt: boolean
+  ctrl: boolean
+  shift: boolean
+  win: boolean
+  character?: string
+}
+
+export declare function startRawInputObserver(callback: ((err: Error | null, arg: KeyEvent) => any)): void
+
+export declare function stopRawInputObserver(): void
+
+export declare function uninstallKeyboardHook(): void
+
 /**
  * Validates an existing Dodo Payments license key against the live API.
  *

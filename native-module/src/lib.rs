@@ -13,6 +13,7 @@ use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use ringbuf::traits::Consumer;
 
 pub mod audio_config;
+pub mod keyboard;
 pub mod license;
 pub mod microphone;
 pub mod silence_suppression;

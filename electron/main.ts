@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, systemPreferences, screen, desktopCapturer } from "electron"
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, systemPreferences, screen, desktopCapturer, globalShortcut } from "electron"
 import path from "path"
 import fs from "fs"
 import { autoUpdater } from "electron-updater"
@@ -152,6 +152,8 @@ import { ModelSelectorWindowHelper } from "./ModelSelectorWindowHelper"
 import { CropperWindowHelper } from "./CropperWindowHelper"
 import { ScreenshotHelper } from "./ScreenshotHelper"
 import { KeybindManager } from "./services/KeybindManager"
+import { WindowsKeyboardHook, WindowsRawInputObserver, NativeKeyEvent } from "./services/WindowsKeyboardHook"
+import { KEYBOARD_PIPELINE_CHANNELS, TYPE_MODE_HOTKEY_ACCELERATOR } from "./services/keyboardPipelineIpc"
 import { ProcessingHelper } from "./ProcessingHelper"
 
 import { IntelligenceManager } from "./IntelligenceManager"
@@ -250,6 +252,15 @@ export class AppState {
 
   private hasDebugged: boolean = false
   private isMeetingActive: boolean = false; // Guard for session state leaks
+
+  // Windows-only stealth keyboard pipeline (issue #225). Both are null on
+  // non-Windows. The LL hook is installed only during user-initiated type
+  // mode windows; the raw-input observer is started once when stealth mode
+  // is enabled (passive, observe-only).
+  private keyboardHook: WindowsKeyboardHook | null = null;
+  private rawInputObserver: WindowsRawInputObserver | null = null;
+  private typeModeActive: boolean = false;
+  private rawInputObserverActive: boolean = false;
   // Tracks remembered output device so reconfigureAudio can no-op when nothing changed.
   // Mirrors the existing _lastRequestedInputDeviceId for the input side.
   private _lastRequestedOutputDeviceId: string | undefined = undefined;
@@ -313,6 +324,20 @@ export class AppState {
     this.settingsWindowHelper.setContentProtection(this.isUndetectable);
     this.modelSelectorWindowHelper.setContentProtection(this.isUndetectable);
     this.cropperWindowHelper.setContentProtection(this.isUndetectable);
+
+    // Stealth keyboard pipeline (Win32 only). The instances are cheap to
+    // construct on any platform — they short-circuit start() on non-Win32.
+    // The native module isn't loaded until start() is actually called.
+    if (process.platform === 'win32') {
+      this.keyboardHook = new WindowsKeyboardHook({
+        onKey: (event) => this.handleTypeModeKey(event),
+        onIdleTimeout: () => this.handleTypeModeIdleTimeout(),
+        onSilentlyUninstalled: () => this.handleTypeModeSilentUninstall(),
+      });
+      this.rawInputObserver = new WindowsRawInputObserver({
+        onKey: (event) => this.handleRawInputKey(event),
+      });
+    }
 
     if (process.platform === 'win32' || process.platform === 'darwin') {
       this.cropperWindowHelper.preload();
@@ -3252,6 +3277,30 @@ export class AppState {
     // Broadcast state change to all relevant windows
     this._broadcastToAllWindows('undetectable-changed', state);
 
+    // --- WIN32 STEALTH WIRING ---
+    // Flip the overlay's WS_EX_NOACTIVATE bit to match undetectable state.
+    // When state=true, the overlay HWND can no longer become foreground, so
+    // user clicks/keystrokes targeting the browser do NOT fire blur on the
+    // previously-active window (issue #225). Launcher window stays focusable
+    // — the user needs to interact with the launcher.
+    if (process.platform === 'win32') {
+      const overlay = this.windowHelper.getOverlayWindow();
+      if (overlay && !overlay.isDestroyed()) {
+        overlay.setFocusable(!state);
+      }
+      // Always-on passive raw-input observer follows undetectable mode:
+      // when stealth is OFF the user can interact normally and we don't
+      // need the typing-nudge UX. When stealth flips OFF we MUST also
+      // stop type mode if it was active — its hook would otherwise
+      // continue swallowing keys.
+      if (state) {
+        this.startRawInputObserver();
+      } else {
+        this.stopRawInputObserver();
+        if (this.typeModeActive) this.exitTypeMode();
+      }
+    }
+
     // --- STEALTH MODE LOGIC ---
     // The dock hide/show is debounced: rapid toggles update isUndetectable immediately
     // (so content protection, IPC broadcasts and the guard above are always current),
@@ -3328,6 +3377,136 @@ export class AppState {
 
   public getUndetectable(): boolean {
     return this.isUndetectable
+  }
+
+  // --- WIN32 STEALTH TYPE MODE (issue #225 Phase 2) ---
+  //
+  // Enters/exits the opt-in keyboard hook session. While type mode is on,
+  // every keystroke is swallowed by the LL hook and forwarded to the
+  // overlay renderer over IPC channel 'overlay:type-mode-key'. The browser
+  // does not see the keystrokes — so no blur/focus events fire, and the
+  // overlay HWND can stay non-foreground (Phase 1 contract).
+  //
+  // The renderer is responsible for:
+  //   * showing a clear "typing..." indicator while events arrive,
+  //   * appending printable chars to the input field,
+  //   * triggering exitTypeMode() on Esc / Enter / submit.
+  //
+  // Defensive auto-exit fires after 5s idle (in WindowsKeyboardHook) so an
+  // orphaned session can never silently keylog.
+
+  public enterTypeMode(): { ok: true } | { ok: false; reason: string } {
+    if (process.platform !== 'win32') {
+      return { ok: false, reason: 'type mode is windows-only' };
+    }
+    if (!this.keyboardHook) {
+      return { ok: false, reason: 'keyboard hook not initialized' };
+    }
+    // Refuse to install the LL hook unless we're actually in stealth mode.
+    // With undetectable=false the overlay is focusable and the user can
+    // click + type natively — there is no UX reason to swallow keystrokes,
+    // and the hook itself is the textbook AV signature for a keylogger.
+    // Keeping its lifetime tied to stealth mode minimises that exposure.
+    if (!this.isUndetectable) {
+      return { ok: false, reason: 'type mode requires undetectable mode' };
+    }
+    if (this.typeModeActive) {
+      return { ok: true };
+    }
+    try {
+      this.keyboardHook.start();
+      this.typeModeActive = true;
+      this._broadcastToAllWindows(KEYBOARD_PIPELINE_CHANNELS.TYPE_MODE_STATE, { active: true });
+      return { ok: true };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[Stealth] enterTypeMode failed:', msg);
+      return { ok: false, reason: msg };
+    }
+  }
+
+  public exitTypeMode(): void {
+    if (!this.typeModeActive) return;
+    this.typeModeActive = false;
+    if (this.keyboardHook) this.keyboardHook.stop();
+    this._broadcastToAllWindows(KEYBOARD_PIPELINE_CHANNELS.TYPE_MODE_STATE, { active: false });
+  }
+
+  public toggleTypeMode(): void {
+    if (this.typeModeActive) this.exitTypeMode();
+    else this.enterTypeMode();
+  }
+
+  public isTypeModeActive(): boolean {
+    return this.typeModeActive;
+  }
+
+  private handleTypeModeKey(event: NativeKeyEvent): void {
+    // Forward to all windows; the overlay renderer is the only listener.
+    // Sending only on key-down keeps the JS side simple — key-up doesn't
+    // carry input information once we've already accounted for modifiers.
+    if (!event.down) return;
+    this._broadcastToAllWindows(KEYBOARD_PIPELINE_CHANNELS.TYPE_MODE_KEY, event);
+  }
+
+  private handleTypeModeIdleTimeout(): void {
+    this.typeModeActive = false;
+    this._broadcastToAllWindows(KEYBOARD_PIPELINE_CHANNELS.TYPE_MODE_STATE, { active: false, reason: 'idle' });
+  }
+
+  private handleTypeModeSilentUninstall(): void {
+    // Windows uninstalled our hook because the proc exceeded
+    // LowLevelHooksTimeout. The bridge has already torn down. Update
+    // visible state with a distinct reason so the renderer can show a
+    // useful error toast instead of pretending nothing happened.
+    this.typeModeActive = false;
+    console.warn('[Stealth] type mode silently uninstalled by Windows (LowLevelHooksTimeout)');
+    this._broadcastToAllWindows(KEYBOARD_PIPELINE_CHANNELS.TYPE_MODE_STATE, {
+      active: false,
+      reason: 'silently-uninstalled',
+    });
+  }
+
+  // --- WIN32 PASSIVE RAW INPUT OBSERVER (issue #225 Phase 3) ---
+  //
+  // Always-on (or as opted-in) keystroke observer. Does NOT swallow keys —
+  // the browser still receives every keystroke. Used to surface a faint
+  // "press the type-mode hotkey" nudge in the overlay when the user starts
+  // typing into their browser. Low AV / EDR risk because we observe only.
+
+  public startRawInputObserver(): void {
+    if (process.platform !== 'win32' || !this.rawInputObserver) return;
+    if (this.rawInputObserverActive) return;
+    try {
+      this.rawInputObserver.start();
+      this.rawInputObserverActive = true;
+    } catch (e) {
+      console.error('[Stealth] startRawInputObserver failed:', e);
+    }
+  }
+
+  public stopRawInputObserver(): void {
+    if (!this.rawInputObserverActive || !this.rawInputObserver) return;
+    this.rawInputObserverActive = false;
+    this.rawInputObserver.stop();
+  }
+
+  private handleRawInputKey(event: NativeKeyEvent): void {
+    // Filter out modifier-only and key-up events — they don't represent
+    // "the user is actively typing words". The renderer sees a steady
+    // stream of "user is typing in another app" pings only on real text
+    // input.
+    if (!event.down) return;
+    if (event.character === null) {
+      // Allow vk for letter/digit (0x30-0x5A) through even if no character
+      // came along (raw_input never resolves chars). Filter pure modifiers.
+      const isLetterOrDigit = (event.vk >= 0x30 && event.vk <= 0x39) || (event.vk >= 0x41 && event.vk <= 0x5A);
+      if (!isLetterOrDigit) return;
+    }
+    this._broadcastToAllWindows(KEYBOARD_PIPELINE_CHANNELS.RAW_INPUT_TYPING, {
+      vk: event.vk,
+      ts: Date.now(),
+    });
   }
 
   // --- Mouse Passthrough (Adapted from public PR #113 — verify premium interaction) ---
@@ -3675,6 +3854,34 @@ async function initializeApp() {
   // Register global shortcuts using KeybindManager
   KeybindManager.getInstance().registerGlobalShortcuts()
 
+  // Win32 stealth type-mode hotkey (issue #225 Phase 2). Default
+  // Ctrl+Shift+Space — a chord that is unlikely to clash with browser /
+  // editor shortcuts. Toggles type mode on; Esc / Enter / 5s idle exit it.
+  // We don't thread this through KeybindManager yet — the user-customizable
+  // shortcut surface can adopt it once the underlying pipeline is proven.
+  if (process.platform === 'win32') {
+    try {
+      // globalShortcut.register returns void in current Electron typings;
+      // verify success via isRegistered() instead.
+      globalShortcut.register(TYPE_MODE_HOTKEY_ACCELERATOR, () => {
+        appState.toggleTypeMode();
+      });
+      if (globalShortcut.isRegistered(TYPE_MODE_HOTKEY_ACCELERATOR)) {
+        console.log(`[Stealth] Type-mode hotkey registered: ${TYPE_MODE_HOTKEY_ACCELERATOR}`);
+      } else {
+        console.warn(`[Stealth] Failed to register type-mode hotkey ${TYPE_MODE_HOTKEY_ACCELERATOR}`);
+      }
+    } catch (e) {
+      console.error('[Stealth] globalShortcut.register threw:', e);
+    }
+
+    // If we booted in undetectable mode, start the passive raw-input
+    // observer right away so the typing-nudge UX is live from boot.
+    if (appState.getUndetectable()) {
+      appState.startRawInputObserver();
+    }
+  }
+
   // System sleep/wake handling. macOS invalidates CoreAudio AggregateDevice
   // handles on sleep — without this the Process Tap silently stops delivering
   // buffers on resume and the user sits in front of a frozen transcript with
@@ -3838,6 +4045,18 @@ async function initializeApp() {
   app.on("before-quit", (event) => {
     console.log("App is quitting, cleaning up resources...");
     appState.setQuitting(true);
+
+    // Tear down the Win32 stealth keyboard pipeline. Both stop() calls are
+    // idempotent and short-circuit on non-Win32. Critical that the LL hook
+    // is removed before the process exits — leaving it installed could,
+    // worst case, hang explorer.exe's input pipe for a beat.
+    try {
+      appState.exitTypeMode();
+      appState.stopRawInputObserver();
+      globalShortcut.unregisterAll();
+    } catch (e) {
+      console.error('[Main] Stealth keyboard pipeline shutdown failed:', e);
+    }
 
     // Dispose CropperWindowHelper to clean up IPC listeners and prevent memory leaks
     // This is critical to prevent resource leaks and ensure proper cleanup
