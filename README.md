@@ -47,6 +47,13 @@ If you’re looking for a hosted desktop recording API, consider checking out [R
 ![Status](https://img.shields.io/badge/Status-active-success?style=flat-square)
 [![X Community](https://img.shields.io/badge/Community-black?style=flat-square&logo=x&logoColor=white)](https://x.com/i/communities/2031398735515693507)
 
+## CrackWithAI Beta Fork
+
+This public AGPL app fork is configured for the CrackWithAI beta backend at `api.crackwithai.com`.
+The existing local `nativelyApiKey` credential storage path is intentionally preserved for compatibility, but the app labels it as a **CrackWithAI Beta Access Key** in settings.
+
+Source code for this public fork is available at [github.com/Sasikeerthan/natively-cluely-ai-assistant](https://github.com/Sasikeerthan/natively-cluely-ai-assistant). The AGPL-3.0 license obligations remain in effect for this fork and any network-accessible modified versions.
+
 > **Competitors charge $20–$149/month, store your data on their servers, and one already breached 83,000 users.** Natively costs $0, runs locally, and has never had a data breach. Your keys, your models, your machine.
 
 <p align="center">
@@ -317,16 +324,16 @@ Under the hood, Natively API connects you to the absolute best models for the op
 **Don't start the long way.** Skip the 20-minute manual setup. One Natively subscription skips all of it — AI, transcription, and web search are ready immediately.
 
 <p align="center">
-  <a href="https://checkout.dodopayments.com/buy/pdt_0NbFixGmD8CSeawb5qvVl">
+  <a href="https://beta.crackwithai.com">
     <img src="https://img.shields.io/badge/Standard_Plan-Subscribe_Now-94a3b8?style=for-the-badge&logo=fastapi&logoColor=white" />
   </a>
-  <a href="https://checkout.dodopayments.com/buy/pdt_0NcM6Aw0IWdspbsgUeCLA">
+  <a href="https://beta.crackwithai.com">
     <img src="https://img.shields.io/badge/Pro_Plan-Subscribe_Now-8b5cf6?style=for-the-badge&logo=fastapi&logoColor=white" />
   </a>
-  <a href="https://checkout.dodopayments.com/buy/pdt_0NcM7JElX4Af6LNVFS1Yf">
+  <a href="https://beta.crackwithai.com">
     <img src="https://img.shields.io/badge/Max_Plan-Subscribe_Now-6366f1?style=for-the-badge&logo=fastapi&logoColor=white" />
   </a>
-  <a href="https://checkout.dodopayments.com/buy/pdt_0NcM7rC2kAb69TFKsZnUU">
+  <a href="https://beta.crackwithai.com">
     <img src="https://img.shields.io/badge/Ultra_Plan-Subscribe_Now-fbbf24?style=for-the-badge&logo=fastapi&logoColor=white" />
   </a>
 </p>
@@ -365,10 +372,10 @@ We've launched the official **$NAT token** on Printr! Holders who maintain a spe
 | **Priority Feature Access & Support**               |      ❌       |      ✅      |
 
 <p align="center">
-  <a href="https://checkout.dodopayments.com/buy/pdt_0NbHo6EnXlNPqNcZ14OTi">
+  <a href="https://beta.crackwithai.com">
     <img src="https://img.shields.io/badge/Lifetime_License-Unlock_Premium-facc15?style=for-the-badge&logo=fastapi&logoColor=black" />
   </a>
-  <a href="https://checkout.dodopayments.com/buy/pdt_0NcM4QBwy0CDcPV9CXaNP">
+  <a href="https://beta.crackwithai.com">
     <img src="https://img.shields.io/badge/Yearly_License-Unlock_Premium-black?style=for-the-badge&logo=fastapi&logoColor=white" />
   </a>
 </p>

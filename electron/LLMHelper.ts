@@ -24,7 +24,7 @@ import type { TranscriptTurn } from "./llm/transcriptCleaner"
 import { deepVariableReplacer, getByPath, injectImageIntoMessages } from './utils/curlUtils';
 import curl2Json from "@bany/curl-to-json";
 import { CustomProvider, CurlProvider } from './services/CredentialsManager';
-import { TRIAL_SENTINEL_KEY } from './config/constants';
+import { CRACKWITHAI_API_ENDPOINTS, TRIAL_SENTINEL_KEY } from './config/constants';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import axios from 'axios';
@@ -1581,7 +1581,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     }
     if (!nativelyKey) throw new Error('Natively API key not set');
 
-    const endpointUrl = 'https://api.natively.software/v1/chat';
+    const endpointUrl = CRACKWITHAI_API_ENDPOINTS.chat;
     // When the key is the trial sentinel, authenticate with the real trial token
     // instead — the server validates x-trial-token, not __trial__ as an API key.
     const headers: any = { 'Content-Type': 'application/json' };
@@ -2861,7 +2861,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     const _connectTimer = setTimeout(() => _connectController.abort(new Error('Natively API connect timeout (10s)')), 10_000);
     let response: Response;
     try {
-      response = await fetch('https://api.natively.software/v1/chat', {
+      response = await fetch(CRACKWITHAI_API_ENDPOINTS.chat, {
         method: 'POST',
         headers: streamHeaders,
         body: JSON.stringify(body),

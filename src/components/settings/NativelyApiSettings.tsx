@@ -6,7 +6,6 @@ import {
     Zap, Clock, Sparkles
 } from 'lucide-react';
 import { NativelyLogoMark } from '../NativelyLogoMark';
-import { FreeTrialModal } from '../trial/FreeTrialModal';
 
 // ─── Types ───────────────────────────────────────────────────
 interface QuotaBucket { used: number; limit: number; remaining: number; }
@@ -21,10 +20,12 @@ interface UsageData {
     };
 }
 
-const PLAN_STANDARD_URL = 'https://checkout.dodopayments.com/buy/pdt_0NbFixGmD8CSeawb5qvVl';
-const PLAN_PRO_URL      = 'https://checkout.dodopayments.com/buy/pdt_0NcM6Aw0IWdspbsgUeCLA';
-const PLAN_MAX_URL      = 'https://checkout.dodopayments.com/buy/pdt_0NcM7JElX4Af6LNVFS1Yf';
-const PLAN_ULTRA_URL    = 'https://checkout.dodopayments.com/buy/pdt_0NcM7rC2kAb69TFKsZnUU';
+const BETA_ACCESS_URL   = 'https://beta.crackwithai.com';
+const PLAN_STANDARD_URL = BETA_ACCESS_URL;
+const PLAN_PRO_URL      = BETA_ACCESS_URL;
+const PLAN_MAX_URL      = BETA_ACCESS_URL;
+const PLAN_ULTRA_URL    = BETA_ACCESS_URL;
+const SOURCE_CODE_URL   = 'https://github.com/Sasikeerthan/natively-cluely-ai-assistant';
 
 // ─── Quota bar ───────────────────────────────────────────────
 function QuotaBar({ label, icon: Icon, bucket, barColor }: {
@@ -321,7 +322,7 @@ export const NativelyApiSettings: React.FC = () => {
                 <div className="flex flex-col gap-2.5 mb-4">
                     <div className="flex items-center justify-between">
                         <p className="text-[10px] font-semibold text-text-tertiary uppercase tracking-widest">Choose a Plan</p>
-                        <span className="text-[10px] text-text-tertiary">Pro, Max &amp; Ultra include Natively Pro app</span>
+                        <span className="text-[10px] text-text-tertiary">Beta access includes managed AI, transcription, and search</span>
                     </div>
                     <div className="w-full flex items-center justify-center py-2 bg-violet-500/10 border border-violet-500/20 rounded-[10px]">
                         <span className="text-[11.5px] font-medium text-violet-400/90">
@@ -442,9 +443,9 @@ export const NativelyApiSettings: React.FC = () => {
             {/* ── Page title ───────────────────────────────────── */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-[15px] font-semibold text-text-primary tracking-[-0.01em]">Natively API</h3>
+                    <h3 className="text-[15px] font-semibold text-text-primary tracking-[-0.01em]">CrackWithAI Beta</h3>
                     <p className="text-[12px] text-text-tertiary mt-0.5 leading-snug">
-                        Managed transcription, AI &amp; search
+                        One beta access key for managed transcription, AI &amp; search
                     </p>
                 </div>
                 {!isLoading && isSaved && (
@@ -457,141 +458,23 @@ export const NativelyApiSettings: React.FC = () => {
                 )}
             </div>
 
-            {/* ── Free Trial Modal (post-trial) ─────────────── */}
-            {showTrialModal && trialState && (
-                <FreeTrialModal
-                    usage={trialState.usage}
-                    onByok={handleByok}
-                    onDone={handleTrialDone}
-                />
+            {!isLoading && !isSaved && (
+                <Card className="shadow-sm">
+                    <div className="px-5 py-4 flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+                            <CalendarClock size={16} className="text-blue-400" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-text-primary">Manual beta access</p>
+                            <p className="text-[11px] text-text-tertiary leading-relaxed mt-0.5">
+                                Complete payment separately, then paste the one-hour beta key shared with you.
+                            </p>
+                        </div>
+                    </div>
+                </Card>
             )}
 
-            {/* ── Active trial status card ──────────────────── */}
-            {trialState?.active && (() => {
-                const sttMin = (trialState.usage.stt_seconds / 60).toFixed(1);
-                return (
-                    <Card className="shadow-sm border-violet-500/25">
-                        <div className="px-5 pt-5 pb-5 space-y-4">
-                            {/* Header — same layout as "Try Natively API free" start card */}
-                            <div className="flex items-start gap-3.5">
-                                <div className="w-10 h-10 rounded-[11px] bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
-                                    <NativelyLogoMark size={18} className="text-violet-400" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between">
-                                        <p className="text-[13.5px] font-semibold text-text-primary tracking-tight">Free Trial Active</p>
-                                        <TrialCountdown expiresAt={trialState.expiresAt} />
-                                    </div>
-                                    <p className="text-[10.5px] text-text-tertiary mt-1">
-                                        {trialState.usage.ai} AI · {sttMin} min STT · {trialState.usage.search} searches used
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Usage pills */}
-                            <div className="grid grid-cols-3 gap-2">
-                                <TrialUsagePill icon={Zap}    used={trialState.usage.ai}  limit={10}  label="AI"     unit="" />
-                                <TrialUsagePill icon={Mic}    used={Math.round(trialState.usage.stt_seconds / 60)} limit={10} label="STT"    unit="m" />
-                                <TrialUsagePill icon={Search} used={trialState.usage.search} limit={2}  label="Search" unit="" />
-                            </div>
-
-                            {/* CTA */}
-                            <button
-                                onClick={() => setShowTrialModal(true)}
-                                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-[9px] text-[12.5px] font-semibold bg-violet-600 hover:bg-violet-500 text-white shadow-[0_1px_3px_rgba(0,0,0,0.1)] transition-all active:scale-[0.98] cursor-pointer"
-                            >
-                                <ArrowUpRight size={13} strokeWidth={2.3} />
-                                Keep the momentum going
-                            </button>
-                        </div>
-                    </Card>
-                );
-            })()}
-
-            {/* ── Free trial start card (no key, no active trial) ── */}
-            {!isLoading && !isSaved && !isCheckingTrial && (!trialState || (trialState.expired && !trialState.active)) && (() => {
-                const isClaimed = trialState?.expired === true || localStorage.getItem('natively_trial_claimed') === 'true';
-                
-                if (isClaimed) {
-                    return null;
-                }
-
-                return (
-                    <Card className="shadow-sm">
-                        <div className="px-5 pt-5 pb-4 flex flex-col items-center justify-center text-center">
-                            {/* Apple Promo Icon */}
-                            <div className="w-[42px] h-[42px] mb-3 rounded-[12px] bg-bg-input border border-border-subtle shadow-[inset_0_1px_rgba(255,255,255,0.06),0_2px_8px_rgba(0,0,0,0.04)] flex items-center justify-center relative overflow-hidden">
-                                <NativelyLogoMark size={20} className={isClaimed ? "text-text-tertiary" : "text-text-primary drop-shadow-sm"} />
-                            </div>
-                            
-                            <h3 className="text-[14.5px] font-bold text-text-primary tracking-tight mb-1">Natively API. Try it free.</h3>
-                            <p className="text-[12px] text-text-secondary leading-snug px-4 mb-4">
-                                Experience managed text-to-speech, AI models, and real-time research without a subscription.
-                            </p>
-
-                            {/* Clean limits grid container */}
-                            <div className="flex items-center justify-center gap-3.5 mb-5 text-[11.5px] font-medium text-text-primary bg-bg-input px-3.5 py-2 rounded-[8px] border border-border-subtle shadow-[inset_0_1px_rgba(255,255,255,0.02)]">
-                                <div className="flex flex-col items-center gap-1">
-                                    <Clock size={14} strokeWidth={2} className="text-blue-500" />
-                                    <span>30 min</span>
-                                </div>
-                                <div className="w-px h-5 bg-border-subtle/80" />
-                                <div className="flex flex-col items-center gap-1">
-                                    <Brain size={14} strokeWidth={2} className="text-violet-500" />
-                                    <span>10 reqs</span>
-                                </div>
-                                <div className="w-px h-5 bg-border-subtle/80" />
-                                <div className="flex flex-col items-center gap-1">
-                                    <Mic size={14} strokeWidth={2} className="text-emerald-500" />
-                                    <span>10m STT</span>
-                                </div>
-                                <div className="w-px h-5 bg-border-subtle/80" />
-                                <div className="flex flex-col items-center gap-1">
-                                    <Search size={14} strokeWidth={2} className="text-orange-500" />
-                                    <span>2 searches</span>
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={handleStartTrial}
-                                disabled={trialLoading || isClaimed}
-                                className={`w-full max-w-[240px] flex items-center justify-center gap-2 py-2 rounded-full text-[13px] font-bold shadow-[0_1px_3px_rgba(0,0,0,0.1)] transition-all ${
-                                    isClaimed 
-                                    ? 'bg-bg-input text-text-tertiary border border-border-subtle cursor-not-allowed'
-                                    : 'bg-text-primary hover:bg-text-primary/90 text-bg-primary active:scale-[0.98]'
-                                }`}
-                            >
-                                {trialLoading ? <><Loader2 size={13} className="animate-spin" /> Starting trial…</>
-                                : isClaimed ? 'Trial Already Claimed'
-                                : 'Start 10-Minute Free Trial'}
-                            </button>
-
-                            {/* Error Handling */}
-                            {trialError && !isClaimed && (
-                                <div className="flex items-center gap-1.5 px-3 py-2 mt-3 bg-red-500/10 border border-red-500/20 rounded-[8px]">
-                                    <AlertCircle size={13} className="text-red-500 shrink-0" strokeWidth={2} />
-                                    <p className="text-[11.5px] text-red-500 font-medium">{trialError}</p>
-                                </div>
-                            )}
-
-                            <p className="text-[10.5px] text-text-tertiary font-medium mt-3">
-                                No account needed — bound to this device.
-                            </p>
-                            
-                            <div className="w-[30px] h-px bg-border-subtle my-3" />
-                            
-                            <p className="text-[11px] text-text-secondary font-medium">
-                                Already have an API key? Enter it below.
-                            </p>
-                        </div>
-                    </Card>
-                );
-            })()}
-
-            {/* ── Plans ────────────────────────────────────────── */}
-            {!isSaved && PlansCard}
-
-            {/* ── API Key card ─────────────────────────────────── */}
+            {/* ── Beta access key card ──────────────────────────── */}
             <Card>
                 {/* Card header */}
                 <div className="flex items-center gap-3 px-5 pt-5 pb-4">
@@ -600,9 +483,9 @@ export const NativelyApiSettings: React.FC = () => {
                         <NativelyLogoMark size={18} className="text-blue-400" />
                     </div>
                     <div className="min-w-0">
-                        <p className="text-[13px] font-semibold text-text-primary">API Key</p>
+                        <p className="text-[13px] font-semibold text-text-primary">CrackWithAI Beta Access Key</p>
                         <p className="text-[11px] text-text-tertiary leading-snug mt-0.5">
-                            Your Natively API key from your subscription email
+                            Stored locally in the existing encrypted key slot
                         </p>
                     </div>
                 </div>
@@ -614,7 +497,7 @@ export const NativelyApiSettings: React.FC = () => {
                 <div className="px-5 pt-4 pb-5 space-y-3">
                     {/* Label row */}
                     <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-semibold text-text-tertiary uppercase tracking-widest">Secret key</span>
+                        <span className="text-[10px] font-semibold text-text-tertiary uppercase tracking-widest">Beta access key</span>
                         {isSaved && (
                             <button
                                 onClick={handleClear}
@@ -632,7 +515,7 @@ export const NativelyApiSettings: React.FC = () => {
                         value={apiKey}
                         onChange={e => { setApiKey(e.target.value); setIsSaved(false); setError(null); }}
                         onKeyDown={e => e.key === 'Enter' && handleSave()}
-                        placeholder="natively_api_..."
+                        placeholder="Paste beta access key"
                         spellCheck={false}
                         autoComplete="off"
                         className={`w-full bg-bg-input border rounded-xl px-3.5 py-2.5 text-[13px] font-mono text-text-primary
@@ -673,10 +556,10 @@ export const NativelyApiSettings: React.FC = () => {
                     <p className="text-[11px] text-text-secondary leading-relaxed text-center">
                         Don't have a key?{' '}
                         <span
-                            onClick={() => openExternal(PLAN_STANDARD_URL)}
+                            onClick={() => openExternal(BETA_ACCESS_URL)}
                             className="text-blue-400 hover:text-blue-300 cursor-pointer transition-colors duration-150"
                         >
-                            Subscribe to get one
+                            Get beta access
                         </span>
                     </p>
 
@@ -684,13 +567,35 @@ export const NativelyApiSettings: React.FC = () => {
                     <p className="text-[10.5px] text-text-tertiary leading-relaxed text-center">
                         By saving your key, you agree to our{' '}
                         <span
-                            onClick={() => openExternal('https://natively.software/nativelyapi/t&c')}
+                            onClick={() => openExternal(BETA_ACCESS_URL)}
                             className="text-text-secondary hover:text-text-primary underline decoration-border-subtle underline-offset-[3px] cursor-pointer transition-colors"
                         >
-                            Terms &amp; Conditions
+                            beta access terms
                         </span>
                         .
                     </p>
+                </div>
+            </Card>
+
+            <Card>
+                <div className="px-5 py-4 flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                            <Shield size={16} className="text-emerald-400" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-text-primary">Open source AGPL app</p>
+                            <p className="text-[11px] text-text-tertiary leading-relaxed mt-0.5">
+                                This CrackWithAI beta fork keeps the public AGPL source available for review and redistribution.
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => openExternal(SOURCE_CODE_URL)}
+                        className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-bg-input hover:bg-bg-elevated border border-border-subtle text-text-primary transition-colors"
+                    >
+                        Source Code <ExternalLink size={11} />
+                    </button>
                 </div>
             </Card>
 
@@ -763,9 +668,6 @@ export const NativelyApiSettings: React.FC = () => {
                     )}
                 </Card>
             )}
-
-            {/* ── Plans ────────────────────────────────────────── */}
-            {isSaved && PlansCard}
 
             {/* ── How it works ─────────────────────────────────── */}
             <Card>

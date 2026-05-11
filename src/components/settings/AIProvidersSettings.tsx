@@ -226,7 +226,7 @@ export const AIProvidersSettings: React.FC = () => {
         }
     }, []);
 
-    // Effect to enforce fast mode disabled if neither Groq key nor Natively API is configured.
+    // Effect to enforce fast mode disabled if neither Groq key nor CrackWithAI Beta is configured.
     // Guard with credentialsLoaded so this never fires during the initial async load phase
     // (when hasStoredKey is still empty and canUseFastMode is incorrectly false).
     useEffect(() => {
@@ -501,6 +501,13 @@ export const AIProvidersSettings: React.FC = () => {
 
     return (
         <div className="space-y-5 animated fadeIn pb-10">
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+                <h3 className="text-sm font-bold text-text-primary mb-1">Advanced BYOK setup</h3>
+                <p className="text-xs text-text-secondary leading-relaxed">
+                    CrackWithAI Beta is the default configured path. Add your own provider keys here only if you need a fallback or local testing.
+                </p>
+            </div>
+
             {/* Default Model for Chat */}
             <div className="space-y-5">
                 <div>
@@ -519,7 +526,7 @@ export const AIProvidersSettings: React.FC = () => {
                             const opts: { id: string; name: string }[] = [];
 
                             if (hasStoredKey.natively) {
-                                opts.push({ id: 'natively', name: 'Natively API' });
+                                opts.push({ id: 'natively', name: 'CrackWithAI Beta' });
                             }
 
                             for (const [prov, cfg] of Object.entries(STANDARD_CLOUD_MODELS)) {
@@ -558,22 +565,22 @@ export const AIProvidersSettings: React.FC = () => {
                 {/* Fast Response Mode */}
                 <div
                     className={`bg-bg-item-surface rounded-xl p-5 border border-border-subtle flex items-center justify-between gap-4 ${!canUseFastMode ? 'opacity-50 grayscale' : ''}`}
-                    title={!canUseFastMode ? "Requires Groq, Natively API, or Codex CLI to be configured" : ""}
+                    title={!canUseFastMode ? "Requires Groq, CrackWithAI Beta, or Codex CLI to be configured" : ""}
                 >
                     <div className="flex-1">
                         <div className="flex items-center gap-2">
                             <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-0">Fast Response Mode</label>
                             <span className="bg-orange-500/10 text-orange-500 text-[9px] font-bold px-1.5 py-0.5 rounded border border-orange-500/20">NEW</span>
                         </div>
-                        <p className="text-[10px] text-text-secondary mt-0.5">Super fast responses using the Codex CLI fast model, Groq, or Natively. Turn this off to use the selected normal model.</p>
+                        <p className="text-[10px] text-text-secondary mt-0.5">Super fast responses using CrackWithAI Beta, the Codex CLI fast model, or Groq. Turn this off to use the selected normal model.</p>
                         {!canUseFastMode && (
-                            <p className="text-[10px] text-orange-500 mt-0.5 font-medium">Requires Groq, Natively API, or Codex CLI to be configured.</p>
+                            <p className="text-[10px] text-orange-500 mt-0.5 font-medium">Requires Groq, CrackWithAI Beta, or Codex CLI to be configured.</p>
                         )}
                     </div>
                     <div
                         onClick={async () => {
                             if (!canUseFastMode) {
-                                alert("Please configure Groq, Natively API, or Codex CLI first to enable Fast Response Mode.");
+                                alert("Please configure CrackWithAI Beta, Groq, or Codex CLI first to enable Fast Response Mode.");
                                 return;
                             }
                             const newState = !fastResponseMode;
@@ -592,8 +599,8 @@ export const AIProvidersSettings: React.FC = () => {
             {/* Cloud Providers */}
             <div className="space-y-5">
                 <div>
-                    <h3 className="text-sm font-bold text-text-primary mb-1">Cloud Providers</h3>
-                    <p className="text-xs text-text-secondary mb-2">Add API keys to unlock cloud AI models.</p>
+                    <h3 className="text-sm font-bold text-text-primary mb-1">Optional Cloud Providers</h3>
+                    <p className="text-xs text-text-secondary mb-2">Advanced fallback keys. Most beta users can leave these empty.</p>
                 </div>
 
                 <div className="space-y-4">

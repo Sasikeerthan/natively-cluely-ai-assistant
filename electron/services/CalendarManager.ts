@@ -4,6 +4,7 @@ import url from 'url';
 import fs from 'fs';
 import path from 'path';
 import { EventEmitter } from 'events';
+import { CRACKWITHAI_API_HTTP_BASE } from '../config/constants';
 
 // Configuration
 // GOOGLE_CLIENT_SECRET is intentionally NOT referenced here — the desktop app
@@ -13,9 +14,9 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "YOUR_CLIENT_ID_HERE";
 const REDIRECT_URI = "http://localhost:11111/auth/callback";
 const SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"];
 const TOKEN_PATH = path.join(app.getPath('userData'), 'calendar_tokens.enc');
-// Base URL for the natively-api proxy. Override with NATIVELY_API_URL for local dev
+// Base URL for the CrackWithAI API proxy. Override with NATIVELY_API_URL for local dev
 // (e.g. http://localhost:3000). Trailing slash is stripped to keep route concat clean.
-const NATIVELY_API_URL = (process.env.NATIVELY_API_URL || 'https://api.natively.software').replace(/\/+$/, '');
+const NATIVELY_API_URL = (process.env.NATIVELY_API_URL || CRACKWITHAI_API_HTTP_BASE).replace(/\/+$/, '');
 
 if (GOOGLE_CLIENT_ID === "YOUR_CLIENT_ID_HERE") {
     console.warn('[CalendarManager] GOOGLE_CLIENT_ID is using the default placeholder. Calendar features will not work until a valid client ID is provided via env var or build config.');
@@ -165,9 +166,9 @@ export class CalendarManager extends EventEmitter {
 
     private async exchangeCodeForToken(code: string) {
         try {
-            // Proxied through natively-api so GOOGLE_CLIENT_SECRET never ships in the desktop app.
+            // Proxied through CrackWithAI API so GOOGLE_CLIENT_SECRET never ships in the desktop app.
             // Fetch (vs. axios) so this call shares the global keep-alive pool with every other
-            // request to api.natively.software and exposes the same error shape (res.ok / res.status)
+            // request to the backend and exposes the same error shape (res.ok / res.status)
             // as the rest of the codebase.
             const response = await fetch(`${NATIVELY_API_URL}/api/calendar/exchange`, {
                 method: 'POST',

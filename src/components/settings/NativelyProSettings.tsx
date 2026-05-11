@@ -184,13 +184,13 @@ export const NativelyProSettings: React.FC = () => {
                             {/* Buy Options */}
                             <div className="grid grid-cols-2 gap-3 w-full">
                                 <button
-                                    onClick={() => window.electronAPI?.openExternal?.('https://checkout.dodopayments.com/buy/pdt_0NbHo6EnXlNPqNcZ14OTi')}
+                                    onClick={() => window.electronAPI?.openExternal?.('https://beta.crackwithai.com')}
                                     className="w-full h-11 rounded-xl bg-[#FACC15] text-black text-[13px] font-bold hover:bg-[#FDE047] active:scale-[0.98] transition-all duration-150 flex items-center justify-center shadow-sm border border-transparent cursor-pointer box-border"
                                 >
                                     Purchase Lifetime
                                 </button>
                                 <button
-                                    onClick={() => window.electronAPI?.openExternal?.('https://checkout.dodopayments.com/buy/pdt_0NcM4QBwy0CDcPV9CXaNP')}
+                                    onClick={() => window.electronAPI?.openExternal?.('https://beta.crackwithai.com')}
                                     className="w-full h-11 rounded-xl bg-bg-input border border-border-subtle text-text-primary text-[13px] font-bold hover:bg-bg-input-hover active:scale-[0.98] transition-all duration-150 flex items-center justify-center shadow-sm cursor-pointer box-border"
                                 >
                                     Purchase Yearly

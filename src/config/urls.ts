@@ -7,13 +7,13 @@
 
 export const CHECKOUT_URLS = {
     /** Natively Pro (lifetime/yearly) */
-    pro: 'https://checkout.dodopayments.com/buy/pdt_0NcM6Aw0IWdspbsgUeCLA',
+    pro: 'https://beta.crackwithai.com',
     /** Natively API — Standard tier */
-    apiStandard: 'https://checkout.dodopayments.com/buy/pdt_0NbFixGmD8CSeawb5qvVl',
+    apiStandard: 'https://beta.crackwithai.com',
     /** Natively API — Pro tier */
-    apiPro: 'https://checkout.dodopayments.com/buy/pdt_0NcM6Aw0IWdspbsgUeCLA',
+    apiPro: 'https://beta.crackwithai.com',
     /** Natively API — Max tier */
-    apiMax: 'https://checkout.dodopayments.com/buy/pdt_0NcM7JElX4Af6LNVFS1Yf',
+    apiMax: 'https://beta.crackwithai.com',
     /** Natively API — Ultra tier */
-    apiUltra: 'https://checkout.dodopayments.com/buy/pdt_0NcM7rC2kAb69TFKsZnUU',
+    apiUltra: 'https://beta.crackwithai.com',
 } as const;

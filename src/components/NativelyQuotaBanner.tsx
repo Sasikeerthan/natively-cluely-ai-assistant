@@ -17,7 +17,7 @@ interface NearLimitBucket {
 
 const STARTUP_DELAY_MS = 3000;
 const THRESHOLD_PCT    = 90;
-const UPGRADE_URL      = 'https://checkout.dodopayments.com/buy/pdt_0NbFixGmD8CSeawb5qvVl';
+const UPGRADE_URL      = 'https://beta.crackwithai.com';
 
 export const NativelyQuotaBanner: React.FC = () => {
     const [nearLimitBuckets, setNearLimitBuckets] = useState<NearLimitBucket[]>([]);

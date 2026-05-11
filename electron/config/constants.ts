@@ -13,3 +13,15 @@
  * rename here updates every call site.
  */
 export const TRIAL_SENTINEL_KEY = '__trial__' as const;
+
+export const CRACKWITHAI_API_HTTP_BASE = 'https://api.crackwithai.com' as const;
+export const CRACKWITHAI_API_WS_BASE = 'wss://api.crackwithai.com' as const;
+
+export const CRACKWITHAI_API_ENDPOINTS = {
+  chat: `${CRACKWITHAI_API_HTTP_BASE}/v1/chat`,
+  transcribe: `${CRACKWITHAI_API_WS_BASE}/v1/transcribe`,
+  usage: `${CRACKWITHAI_API_HTTP_BASE}/v1/usage`,
+  trialStart: `${CRACKWITHAI_API_HTTP_BASE}/v1/trial/start`,
+  trialStatus: `${CRACKWITHAI_API_HTTP_BASE}/v1/trial/status`,
+  trialConvert: `${CRACKWITHAI_API_HTTP_BASE}/v1/trial/convert`,
+} as const;
